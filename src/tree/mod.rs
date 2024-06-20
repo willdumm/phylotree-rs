@@ -9,6 +9,7 @@
 pub mod draw;
 mod node;
 mod tree;
+mod iterators;
 
 pub use self::node::{Node, NodeError};
 pub use self::tree::{Comparison, NewickParseError, Tree, TreeError};
