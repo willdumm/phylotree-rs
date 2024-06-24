@@ -7,15 +7,16 @@ use super::tree::Tree;
 use super::NodeId;
 
 
-struct NodeInTree<'a> {
-    tree: &'a Tree,
-    node: NodeId,
+#[derive(Copy, Clone)]
+pub struct NodeInTree<'a> {
+    pub tree: &'a Tree,
+    pub node: NodeId,
 }
 
 
-struct IterNodeIterator<'a> {
-    nodeids: Iter<'a, usize>,
-    tree: &'a Tree,
+pub struct IterNodeIterator<'a> {
+    pub nodeids: Iter<'a, usize>,
+    pub tree: &'a Tree,
 }
 
 impl<'a> Iterator for IterNodeIterator<'a> {
@@ -32,14 +33,17 @@ impl<'a> Iterator for IterNodeIterator<'a> {
 }
 
 impl<'a> NodeInTree<'a> {
-    fn get_ref(&self) -> &'a Node {
+    pub fn get_ref(&self) -> &'a Node {
         self.tree.get(&self.node).unwrap()
     }
 
-    fn iter_children(&self) -> IterNodeIterator<'a> {
+    pub fn iter_children(&self) -> IterNodeIterator<'a> {
         IterNodeIterator {nodeids: self.get_ref().children.iter(), tree: self.tree}
     }
 
+    pub fn postorder(&self) -> impl TreeIteratorMut<Item = NodeInTree<'a>> {
+        self.dfs_postorder()
+    }
 }
 
 impl<'a> OwnedTreeNode for NodeInTree<'a> {
@@ -64,10 +68,6 @@ mod tests {
 
     #[test]
     fn compare_traversals() {
-        // Ancestors
-        // {
-        //     todo!();
-        // }
 
         let tree = Tree::from_newick("((3,4)2,(6,7)5)1;").unwrap();
         let root = tree.get_root().unwrap();

@@ -9,10 +9,11 @@
 pub mod draw;
 mod node;
 mod tree;
-mod iterators;
+pub mod iterators;
 
 pub use self::node::{Node, NodeError};
 pub use self::tree::{Comparison, NewickParseError, Tree, TreeError};
+pub use self::iterators::NodeInTree;
 
 /// A type that represents Identifiers of [`Node`] objects
 /// within phylogenetic [`Tree`] object.
