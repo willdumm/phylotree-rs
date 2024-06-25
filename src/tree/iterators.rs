@@ -14,12 +14,12 @@ pub struct NodeInTree<'a> {
 }
 
 
-pub struct IterNodeIterator<'a> {
+pub struct NodeInTreeIterator<'a> {
     pub nodeids: Iter<'a, usize>,
     pub tree: &'a Tree,
 }
 
-impl<'a> Iterator for IterNodeIterator<'a> {
+impl<'a> Iterator for NodeInTreeIterator<'a> {
     type Item = NodeInTree<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         let nextid = self.nodeids.next();
@@ -37,23 +37,23 @@ impl<'a> NodeInTree<'a> {
         self.tree.get(&self.node).unwrap()
     }
 
-    pub fn iter_children(&self) -> IterNodeIterator<'a> {
-        IterNodeIterator {nodeids: self.get_ref().children.iter(), tree: self.tree}
+    pub fn iter_children(&self) -> NodeInTreeIterator<'a> {
+        NodeInTreeIterator {nodeids: self.get_ref().children.iter(), tree: self.tree}
     }
 
-    pub fn postorder(&self) -> impl TreeIteratorMut<Item = NodeInTree<'a>> {
+    pub fn postorder(&self) -> impl TreeIteratorMut<Item = NodeId> + 'a {
         self.dfs_postorder()
     }
 }
 
 impl<'a> OwnedTreeNode for NodeInTree<'a> {
-    type OwnedValue = NodeInTree<'a>;
-    type OwnedChildren = IterNodeIterator<'a>;
+    type OwnedValue = NodeId;
+    type OwnedChildren = NodeInTreeIterator<'a>;
 
     fn get_value_and_children(self) -> (Self::OwnedValue, Option<Self::OwnedChildren>) {
         let res = Some(self.iter_children());
         (
-            self,
+            self.node,
             res
         )
     }
@@ -61,7 +61,6 @@ impl<'a> OwnedTreeNode for NodeInTree<'a> {
 
 
 #[cfg(test)]
-// #[allow(clippy::excessive_precision)]
 mod tests {
 
     use super::*;
@@ -86,10 +85,10 @@ mod tests {
         assert_eq!(get_str(&tree.preorder(&root).unwrap(), &tree), preorder);
         assert_eq!(get_str(&tree.levelorder(&root).unwrap(), &tree), levelorder);
         let wnode = NodeInTree{tree: &tree, node: root};
-        assert_eq!(get_str(&wnode.dfs_preorder().map(|n| n.node).collect::<Vec<NodeId>>(), &tree), preorder);
+        assert_eq!(get_str(&wnode.dfs_preorder().collect::<Vec<NodeId>>(), &tree), preorder);
         let wnode = NodeInTree{tree: &tree, node: root};
-        assert_eq!(get_str(&wnode.dfs_postorder().map(|n| n.node).collect::<Vec<NodeId>>(), &tree), postorder);
+        assert_eq!(get_str(&wnode.dfs_postorder().collect::<Vec<NodeId>>(), &tree), postorder);
         let wnode = NodeInTree{tree: &tree, node: root};
-        assert_eq!(get_str(&wnode.bfs().map(|n| n.node).collect::<Vec<NodeId>>(), &tree), levelorder);
+        assert_eq!(get_str(&wnode.bfs().collect::<Vec<NodeId>>(), &tree), levelorder);
     }
 }
