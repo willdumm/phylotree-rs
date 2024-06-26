@@ -2,6 +2,9 @@ use crate::tree::Node as RustNode;
 use crate::tree::Tree as RustTree;
 use pyo3::{exceptions::PyValueError, prelude::*, types::IntoPyDict, Python};
 use std::{collections::HashMap, path::Path};
+use tree_iterators_rs::prelude::TreeIteratorMut;
+use crate::generate_tree as _generate_tree;
+use crate::Distr::Uniform;
 
 #[pyclass]
 struct Tree {
@@ -52,6 +55,7 @@ impl From<crate::tree::NodeError> for NodeError {
         Self(err)
     }
 }
+
 
 #[pymethods]
 impl Tree {
@@ -257,9 +261,16 @@ impl Node {
     }
 }
 
+#[pyfunction]
+fn generate_tree(size: usize, brlens: bool) -> Tree {
+    Tree { tree: _generate_tree(size, brlens, Uniform) }
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn pytree(_py: Python, m: &PyModule) -> PyResult<()> {
+
     m.add_class::<Tree>()?;
+    m.add_function(wrap_pyfunction!(generate_tree, m)?).unwrap();
     Ok(())
 }

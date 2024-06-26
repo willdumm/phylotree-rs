@@ -86,7 +86,7 @@ pub enum NewickParseError {
     #[error("Missing a closing bracket.")]
     UnclosedBracket,
     /// The newick string is missing a final semi-colon
-    #[error("The tree is missin a semi colon at the end.")]
+    #[error("The tree is missing a semi colon at the end.")]
     NoClosingSemicolon,
     /// We are trying to close a subtre but have no parent node.
     #[error("Parent node of subtree not found")]
