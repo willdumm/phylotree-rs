@@ -14,6 +14,9 @@ use std::{
 };
 
 use thiserror::Error;
+use tree_iterators_rs::prelude::*;
+use std::slice::Iter;
+
 
 use super::node::{Node, NodeError};
 use super::{Edge, NewickFormat, NodeId};
@@ -405,16 +408,65 @@ impl Tree {
     }
 }
 
+
+/// Iterator adapters for tree_iterators crate (providing non-recursive iterator implementations)
+#[derive(Copy, Clone)]
+struct NodeInTree<'a> {
+    pub tree: &'a Tree,
+    pub node: NodeId,
+}
+
+
+struct NodeInTreeIterator<'a> {
+    nodeids: Iter<'a, usize>,
+    tree: &'a Tree,
+}
+
+impl<'a> Iterator for NodeInTreeIterator<'a> {
+    type Item = NodeInTree<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let nextid = self.nodeids.next();
+        match nextid {
+            Some(unwrapped_next) => {
+                Some(NodeInTree { tree: self.tree, node: *unwrapped_next })
+            },
+            None => None,
+        }
+    }
+}
+
+impl<'a> NodeInTree<'a> {
+    fn get_ref(&self) -> &'a Node {
+        self.tree.get(&self.node).unwrap()
+    }
+
+    fn iter_children(&self) -> NodeInTreeIterator<'a> {
+        NodeInTreeIterator {nodeids: self.get_ref().children.iter(), tree: self.tree}
+    }
+}
+
+impl<'a> OwnedTreeNode for NodeInTree<'a> {
+    type OwnedValue = NodeId;
+    type OwnedChildren = NodeInTreeIterator<'a>;
+
+    fn get_value_and_children(self) -> (Self::OwnedValue, Option<Self::OwnedChildren>) {
+        let res = Some(self.iter_children());
+        (
+            self.node,
+            res
+        )
+    }
+}
 /// Methods to traverse the [`Tree`]
 ///   
 /// ----
 /// ----
-impl Tree {
+impl<'a> Tree {
     // ###################
     // # TREE TRAVERSALS #
     // ###################
 
-    /// Returns a vector containing node ids in the same order as the
+    /// Returns an iterator containing node ids in the same order as the
     /// [preorder](https://en.wikipedia.org/wiki/Tree_traversal#Pre-order,_NLR) tree traversal
     /// ```
     /// use phylotree::tree::Tree;
@@ -429,16 +481,17 @@ impl Tree {
     ///
     /// assert_eq!(preorder, vec!["F", "B", "A", "D", "C", "E", "G", "I", "H"])
     /// ```
-    pub fn preorder(&self, root: &NodeId) -> Result<Vec<NodeId>, TreeError> {
-        let mut indices = vec![*root];
-        for child in self.get(root)?.children.iter() {
-            indices.extend(self.preorder(child)?)
-        }
-
-        Ok(indices)
+    pub fn preorder_iter(&'a self, root: &NodeId) -> Result<impl TreeIteratorMut<Item = NodeId> + 'a, TreeError> {
+        Ok(NodeInTree {tree: self, node: *root}.dfs_preorder())
     }
 
-    /// Returns a vector containing node ids in the same order as the
+    /// Returns a vector containing the node ids yielded by [`Tree::preorder_iter`]
+    pub fn preorder(&self, root: &NodeId) -> Result<Vec<NodeId>, TreeError> {
+        Ok(self.preorder_iter(root)?.collect())
+    }
+
+
+    /// Returns an iterator containing node ids in the same order as the
     /// [postorder](https://en.wikipedia.org/wiki/Tree_traversal#Post-order,_LRN ) tree traversal
     /// ```
     /// use phylotree::tree::Tree;
@@ -453,14 +506,13 @@ impl Tree {
     ///
     /// assert_eq!(postorder, vec!["A", "C", "E", "D", "B", "H", "I", "G", "F"])
     /// ```
-    pub fn postorder(&self, root: &NodeId) -> Result<Vec<NodeId>, TreeError> {
-        let mut indices = vec![];
-        for child in self.get(root)?.children.iter() {
-            indices.extend(self.postorder(child)?)
-        }
-        indices.push(*root);
+    pub fn postorder_iter(&'a self, root: &NodeId) -> Result<impl TreeIteratorMut<Item = NodeId> + 'a, TreeError> {
+        Ok(NodeInTree {tree: self, node: *root}.dfs_postorder())
+    }
 
-        Ok(indices)
+    /// Returns a vector containing the node ids yielded by [`Tree::postorder_iter`]
+    pub fn postorder(&self, root: &NodeId) -> Result<Vec<NodeId>, TreeError> {
+        Ok(self.postorder_iter(root)?.collect())
     }
 
     /// Returns a vector containing node ids in the same order as the
@@ -507,7 +559,7 @@ impl Tree {
         Ok(indices)
     }
 
-    /// Returns a vector containing node ids in the same order as the
+    /// Returns an iterator containing node ids in the same order as the
     /// [levelorder](https://en.wikipedia.org/wiki/Tree_traversal#Breadth-first_search) tree traversal
     /// ```
     /// use phylotree::tree::Tree;
@@ -522,19 +574,13 @@ impl Tree {
     ///
     /// assert_eq!(levelorder, vec!["F", "B", "G", "A", "D", "I", "C", "E", "H"])
     /// ```
-    pub fn levelorder(&self, root: &NodeId) -> Result<Vec<NodeId>, TreeError> {
-        let mut indices = vec![];
-        let mut queue = VecDeque::new();
-        queue.push_back(root);
-        while !queue.is_empty() {
-            let root = queue.pop_front().unwrap();
-            indices.push(*root);
-            for child in self.get(root)?.children.iter() {
-                queue.push_back(child)
-            }
-        }
+    pub fn levelorder_iter(&'a self, root: &NodeId) -> Result<impl TreeIteratorMut<Item = NodeId> + 'a, TreeError> {
+        Ok(NodeInTree {tree: self, node: *root}.bfs())
+    }
 
-        Ok(indices)
+    /// Returns a vector containing the node ids yielded by [`Tree::levelorder_iter`]
+    pub fn levelorder(&self, root: &NodeId) -> Result<Vec<NodeId>, TreeError> {
+        Ok(self.levelorder_iter(root)?.collect())
     }
 }
 

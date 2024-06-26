@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, PlotConfiguration};
 use criterion::{BenchmarkId, Criterion};
 
-use phylotree::{distr::Distr::Uniform, generate_tree, tree::NodeInTree};
+use phylotree::{distr::Distr::Uniform, generate_tree};
 
 
 /// Measure how distance matrix extraction scales with tree size
@@ -52,8 +52,8 @@ fn newick_parsing(c: &mut Criterion) {
 }
 
 /// Compare iterators
-fn recursive_postorder(c: &mut Criterion) {
-    let mut group = c.benchmark_group("recursive_postorder");
+fn postorder_traversal(c: &mut Criterion) {
+    let mut group = c.benchmark_group("postorder_traversal");
     for size in [10, 20, 40, 100, 500, 1000, 2000, 5000, 10000, 20000].iter() {
         let tree = generate_tree(*size, true, Uniform)
             .unwrap();
@@ -67,20 +67,5 @@ fn recursive_postorder(c: &mut Criterion) {
     }
 }
 
-fn flat_postorder(c: &mut Criterion) {
-    let mut group = c.benchmark_group("flat_postorder");
-    for size in [10, 20, 40, 100, 500, 1000, 2000, 5000, 10000, 20000].iter() {
-        let tree = generate_tree(*size, true, Uniform)
-            .unwrap();
-        group.bench_with_input(BenchmarkId::from_parameter(*size), size, |bencher, _| {
-            bencher.iter(|| {
-                let rootnode = NodeInTree {tree: &tree, node: tree.get_root().unwrap()};
-                for node in rootnode.postorder() {
-                    let _ = node;
-                }
-            })
-        });
-    }
-}
-criterion_group!(benches, dm_vs_treesize, newick_parsing, recursive_postorder, flat_postorder);
+criterion_group!(benches, dm_vs_treesize, newick_parsing, postorder_traversal);
 criterion_main!(benches);
