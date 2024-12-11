@@ -4,6 +4,7 @@
 
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
+use indicatif::ProgressIterator;
 use itertools::Itertools;
 use phylotree::{
     distr::Distr,
@@ -18,7 +19,7 @@ use serde::Serialize;
 use std::{
     collections::BTreeMap,
     fmt::Display,
-    fs::File,
+    fs::{self, File},
     io,
     io::{BufWriter, Write},
     path::Path,
@@ -122,26 +123,34 @@ fn main() {
             }
         }
         cli::Commands::Compare { reftree, tocompare } => {
+            // Read reference tree
             let reftree = Tree::from_file(&reftree).unwrap();
-            let compare = Tree::from_file(&tocompare).unwrap();
-
             let ref_parts = reftree.get_partitions().unwrap();
-            let other_parts = compare.get_partitions().unwrap();
 
-            let common = ref_parts.intersection(&other_parts).count();
+            // Print header
+            println!("tree\tpath\treference\tcommon\tcompared\trf\tnorm_rf\trf_w\tbranch_score");
+            for (i, cmp_path) in tocompare.into_iter().enumerate() {
+                let compare = Tree::from_file(&cmp_path).unwrap();
 
-            let stats = reftree.compare_topologies(&compare).unwrap();
+                let other_parts = compare.get_partitions().unwrap();
 
-            println!("tree\treference\tcommon\tcompared\trf\trf_w\tbranch_score");
-            println!(
-                "0\t{}\t{}\t{}\t{}\t{}\t{}",
-                ref_parts.len() - common,
-                common,
-                other_parts.len() - common,
-                stats.rf,
-                stats.weighted_rf,
-                stats.branch_score,
-            )
+                let common = ref_parts.intersection(&other_parts).count();
+
+                let stats = reftree.compare_topologies(&compare).unwrap();
+
+                println!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    i,
+                    cmp_path.to_str().unwrap_or("-"),
+                    ref_parts.len() - common,
+                    common,
+                    other_parts.len() - common,
+                    stats.rf,
+                    stats.norm_rf,
+                    stats.weighted_rf,
+                    stats.branch_score,
+                )
+            }
         }
         cli::Commands::Matrix {
             tree,
@@ -224,7 +233,9 @@ fn main() {
                 None => Box::new(io::stdout()) as Box<dyn Write>,
             });
 
-            writer.write("Seq1\tSeq2\tDistance\n".as_bytes()).unwrap();
+            writer
+                .write_all("Seq1\tSeq2\tDistance\n".as_bytes())
+                .unwrap();
 
             for pair in tips.iter().combinations(2) {
                 let (n1, n2) = (pair[0], pair[1]);
@@ -232,7 +243,7 @@ fn main() {
                 let i2 = tree.get_by_name(n2).unwrap().id;
                 if let (Some(d), _) = tree.get_distance(&i1, &i2).unwrap() {
                     writer
-                        .write(format!("{n1}\t{n2}\t{d}\n").as_bytes())
+                        .write_all(format!("{n1}\t{n2}\t{d}\n").as_bytes())
                         .unwrap();
                 } else {
                     panic!("The tree is missing some branch lengths between {n1} and {n2}")
@@ -282,7 +293,10 @@ fn main() {
                 })
                 .collect();
 
-            if duplicates.is_empty() {}
+            if duplicates.is_empty() {
+                eprintln!("No duplicates found");
+                return;
+            }
 
             let mut removed = vec![];
 
@@ -398,13 +412,48 @@ fn main() {
             let mut tt = TinyTemplate::new();
             tt.add_template("svg", SVG).unwrap();
             writer
-                .write(tt.render("svg", &ctx).unwrap().as_bytes())
+                .write_all(tt.render("svg", &ctx).unwrap().as_bytes())
                 .unwrap();
         }
         cli::Commands::Completion { shell } => {
             let mut cmd = cli::Args::command();
             let name = cmd.get_name().to_string();
             generate(shell, &mut cmd, name, &mut io::stdout());
+        }
+        cli::Commands::Rescale {
+            trees,
+            factor,
+            output,
+        } => {
+            if trees.len() > 1 {
+                let Some(out) = output else {
+                    eprintln!("You cannot give multiple trees as input without specifying an output directory");
+                    return;
+                };
+
+                fs::create_dir(out.clone()).unwrap();
+
+                let _ = trees
+                    .into_iter()
+                    .map(move |p| {
+                        let name = p.file_name().and_then(|n| n.to_str()).unwrap();
+                        let output = out.clone().join(name);
+
+                        let mut tree = Tree::from_file(&p).unwrap();
+                        tree.rescale(factor);
+                        tree.to_file(&output).unwrap();
+                    })
+                    .progress()
+                    .collect_vec();
+            } else {
+                let mut tree = Tree::from_file(&trees[0]).unwrap();
+                tree.rescale(factor);
+                if let Some(out) = output {
+                    tree.to_file(&out).unwrap();
+                } else {
+                    println!("{}", tree.to_newick().unwrap());
+                }
+            }
         }
     }
 }
@@ -420,7 +469,7 @@ struct Context {
     layout: Layout,
 }
 
-static SVG : &'static str =  "\
+static SVG : &str =  "\
 <?xml version=\"1.0\" standalone=\"no\"?>
 <svg viewBox=\"{xmin} {ymin} {width} {height}\" width='100%' height='100%' xmlns='http://www.w3.org/2000/svg'>
     {{ if not transparent }}
