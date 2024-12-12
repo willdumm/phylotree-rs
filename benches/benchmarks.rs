@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, PlotConfiguration};
-use criterion::{BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box};
 
 use itertools::Itertools;
 use ndarray::{Array2, Axis};
@@ -7,6 +7,34 @@ use ndarray_rand::rand_distr::Uniform as UniformND;
 use ndarray_rand::RandomExt;
 use phylotree::distance::DistanceMatrix;
 use phylotree::{distr::Distr::Uniform, generate_tree};
+
+/// Measure how distance matrix extraction scales with tree size
+fn preorder_vs_treesize(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
+
+    let mut group = c.benchmark_group("preorder_vs_treesize");
+    group.plot_config(plot_config);
+
+    for size in [10, 20, 40, 100, 500, 1000, 2000, 5000, 10000].iter() {
+        let tree = generate_tree(*size, true, Uniform).unwrap();
+        group.bench_with_input(BenchmarkId::new("RecursivePreorder", size), size, |bencher, _size| {
+            bencher.iter(|| {
+                black_box(tree.preorder(&tree.get_root().unwrap()).unwrap())    
+            })
+        });
+        group.bench_with_input(
+            BenchmarkId::new("FlatPreorder", size),
+            size,
+            |bencher, _size| {
+                bencher.iter(|| {
+                    black_box(tree.flat_preorder(&tree.get_root().unwrap()).unwrap())    
+                })
+            },
+        );
+    }
+
+    group.finish();
+}
 
 /// Measure how distance matrix extraction scales with tree size
 fn dm_vs_treesize(c: &mut Criterion) {
@@ -97,5 +125,5 @@ fn phylip_parsing(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, dm_vs_treesize, newick_parsing, phylip_parsing);
+criterion_group!(benches, preorder_vs_treesize, dm_vs_treesize, newick_parsing, phylip_parsing);
 criterion_main!(benches);

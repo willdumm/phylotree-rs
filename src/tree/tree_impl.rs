@@ -446,6 +446,16 @@ impl Tree {
         Ok(indices)
     }
 
+    pub fn flat_preorder(&self, root: &NodeId) -> Result<Vec<NodeId>, TreeError> {
+        let mut visit_stack = vec![*root];
+        let mut result = vec![];
+        while let Some(node) = visit_stack.pop() {
+            result.push(node);
+            visit_stack.extend(self.get(&node)?.children.iter().rev());
+        }
+        Ok(result)
+    }
+
     /// Returns a vector containing node ids in the same order as the
     /// [postorder](https://en.wikipedia.org/wiki/Tree_traversal#Post-order,_LRN ) tree traversal
     /// ```
